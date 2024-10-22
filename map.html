@@ -30,6 +30,7 @@
         getFirestore,
         getDocs,
         collection,
+        onSnapshot,
       } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
       // Firebase configuration
@@ -77,7 +78,13 @@
           map: map,
         });
 
-        // Fetch and display the destination marker and polyline
+        // Set up a real-time listener for changes in the "routes" collection
+        onSnapshot(collection(db, "routes"), (querySnapshot) => {
+          // Call the update function whenever there is a change
+          updateMapWithDestination();
+        });
+
+        // Initial load of the destination
         updateMapWithDestination();
       };
 
