@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Display</title>
+    <style>
+      /* Make the body and html take up the full height */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      /* Add styles for the map */
+      #map {
+        height: 100%; /* Set the height of the map to 100% */
+        width: 100%; /* Set the width of the map to 100% */
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <script type="module">
+      // Import the functions from Firebase SDK
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+      import {
+        getFirestore,
+        getDocs,
+        collection,
+      } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+      // Firebase configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyAkG27RMcJ-DF_BgpEToO64OKeUp4p1Ilo",
+        authDomain: "routefetching.firebaseapp.com",
+        projectId: "routefetching",
+        storageBucket: "routefetching.appspot.com",
+        messagingSenderId: "586802315319",
+        appId: "1:586802315319:web:eadaa5d8bbaed224ab7fb2",
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      // Google Maps API key
+      const googleMapsApiKey = "AIzaSyBrfQWGAKnrdUFK0FBg8LQRSkQt_xzwwuw"; // Replace with your Google Maps API key
+
+      // Initial position
+      const initialPosition = {
+        lat: 13.150168574952062,
+        lng: 123.71410910859481,
+      };
+
+      let map; // Declare the map variable
+      let directionsService; // Directions service variable
+      let directionsRenderer; // Directions renderer variable
+
+      // Function to initialize the Google Map
+      window.initMap = function () {
+        map = new google.maps.Map(document.getElementById("map"), {
+          zoom: 18,
+          center: initialPosition,
+        });
+
+        // Initialize directions service and renderer
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer({
+          polylineOptions: {
+            strokeColor: "#FF0000", // Color of the polyline
+            strokeOpacity: 1.0,
+            strokeWeight: 5,
+          },
+          map: map,
+        });
+
+        // Fetch and display the destination marker and polyline
+        updateMapWithDestination();
+      };
+
+      // Function to update the map with the destination and polyline
+      async function updateMapWithDestination() {
+        const querySnapshot = await getDocs(collection(db, "routes"));
+        let destination = null;
+
+        querySnapshot.forEach((docSnapshot) => {
+          const data = docSnapshot.data();
+          if (data.flag) {
+            destination = { lat: data.lat, lng: data.lng };
+          }
+        });
+
+        if (destination) {
+          // Center the map on the destination
+          map.setCenter(destination);
+
+          // Calculate and display the route
+          const request = {
+            origin: initialPosition,
+            destination: destination,
+            travelMode: google.maps.TravelMode.DRIVING,
+          };
+
+          directionsService.route(request, (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK) {
+              directionsRenderer.setDirections(result);
+            } else {
+              alert("Directions request failed due to " + status);
+            }
+          });
+        }
+      }
+
+      // Load the Google Maps JavaScript API asynchronously
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initMap`;
+      script.async = true;
+      document.head.appendChild(script);
+    </script>
+  </body>
+</html>
