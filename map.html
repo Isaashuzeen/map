@@ -65,6 +65,8 @@
         map = new google.maps.Map(document.getElementById("map"), {
           zoom: 18,
           center: initialPosition,
+          mapTypeControl: false,      // Disable the Map/Satellite button
+          streetViewControl: false,
         });
 
         // Initialize directions service and renderer
