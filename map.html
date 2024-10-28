@@ -77,7 +77,7 @@
         initialMarker = new google.maps.Marker({
           position: initialPosition,
           map: map,
-          icon: "alarm.png", // Custom icon for initial position
+          icon: 'alarm.png', // Custom icon for initial position
         });
 
         onSnapshot(collection(db, "routes"), (querySnapshot) => {
@@ -122,7 +122,7 @@
               destinationMarker = new google.maps.Marker({
                 position: endLocation, // Set marker position to end of polyline
                 map: map,
-                icon: "rescue.png", // Custom icon for destination
+                icon: 'rescue.png', // Custom icon for destination
               });
             } else {
               alert("Directions request failed due to " + status);
