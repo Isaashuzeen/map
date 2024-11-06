@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Display</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+      import {
+        getFirestore,
+        collection,
+        query,
+        where,
+        onSnapshot,
+      } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyCWSEjSqpVqXSyFbfPgEVra6EkEnY5p1EM",
+        authDomain: "cs-911test.firebaseapp.com",
+        projectId: "cs-911test",
+        storageBucket: "cs-911test.appspot.com",
+        messagingSenderId: "17728605700",
+        appId: "1:17728605700:web:3731ae67e1e114cbd06f51",
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const googleMapsApiKey = "AIzaSyBrfQWGAKnrdUFK0FBg8LQRSkQt_xzwwuw";
+
+      let map;
+      let directionsService;
+      let directionsRenderer;
+      let userMarker;
+      let reportMarker;
+
+      let userLocation = null;
+      let reportLocation = null;
+      let dispatchStatus = null;
+      let activeTeamId = null;
+
+      window.initMap = function () {
+        map = new google.maps.Map(document.getElementById("map"), {
+          zoom: 18,
+          center: { lat: 13.150168574952062, lng: 123.71410910859481 },
+          mapTypeControl: false,
+          streetViewControl: false,
+        });
+
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer({
+          polylineOptions: {
+            strokeColor: "#0000FF",
+            strokeOpacity: 1.0,
+            strokeWeight: 5,
+          },
+          map: map,
+          suppressMarkers: true,
+        });
+
+        // Add real-time listeners for flagged user and report locations
+        setupRealTimeListeners();
+      };
+
+      async function setupRealTimeListeners() {
+        const dispatchQuery = query(collection(db, "dispatch"));
+
+        onSnapshot(dispatchQuery, (snapshot) => {
+          if (!snapshot.empty) {
+            const dispatchData = snapshot.docs[0].data();
+            activeTeamId = dispatchData.team;
+            dispatchStatus = dispatchData.status;
+
+            console.log("Dispatch status changed:", dispatchStatus);
+
+            const reportQuery = query(
+              collection(db, "reports"),
+              where("flag", "==", true)
+            );
+
+            onSnapshot(reportQuery, (reportSnapshot) => {
+              if (!reportSnapshot.empty) {
+                const reportDoc = reportSnapshot.docs[0].data();
+                reportLocation = {
+                  lat: reportDoc.location.lat,
+                  lng: reportDoc.location.lng,
+                };
+              } else {
+                reportLocation = null;
+              }
+              updateMarkers();
+              drawPolylineIfReady();
+            });
+
+            if (dispatchStatus === "ongoing" && activeTeamId) {
+              const userQuery = query(
+                collection(db, "users"),
+                where("flag", "==", true),
+                where("role", "==", "SDiZU41f2Ct6JwKVsRJN"),
+                where("team", "==", activeTeamId)
+              );
+
+              onSnapshot(userQuery, (userSnapshot) => {
+                if (!userSnapshot.empty) {
+                  const userDoc = userSnapshot.docs[0].data();
+                  userLocation = {
+                    lat: userDoc.location.lat,
+                    lng: userDoc.location.lng,
+                  };
+                } else {
+                  userLocation = null;
+                }
+                updateMarkers();
+                drawPolylineIfReady();
+              });
+            } else {
+              userLocation = null;
+              updateMarkers();
+              clearPolyline(); // Force clear polyline if conditions are not met
+            }
+          }
+        });
+      }
+
+      function updateMarkers() {
+        if (userLocation) {
+          if (userMarker) userMarker.setMap(null);
+          userMarker = new google.maps.Marker({
+            position: userLocation,
+            map: map,
+            icon: "rescue.png",
+          });
+        } else if (userMarker) {
+          userMarker.setMap(null);
+        }
+
+        if (reportLocation) {
+          if (reportMarker) reportMarker.setMap(null);
+          reportMarker = new google.maps.Marker({
+            position: reportLocation,
+            map: map,
+            icon: "alarm.png",
+          });
+        } else if (reportMarker) {
+          reportMarker.setMap(null);
+        }
+      }
+
+      function drawPolylineIfReady() {
+        if (
+          dispatchStatus === "ongoing" &&
+          activeTeamId &&
+          userLocation &&
+          reportLocation
+        ) {
+          console.log("Drawing polyline...");
+          clearPolyline(); // Clear any existing polyline before drawing
+
+          const request = {
+            origin: userLocation,
+            destination: reportLocation,
+            travelMode: google.maps.TravelMode.DRIVING,
+          };
+
+          directionsService.route(request, (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK) {
+              directionsRenderer.setDirections(result);
+            } else {
+              console.error("Directions request failed due to " + status);
+            }
+          });
+        } else {
+          clearPolyline(); // Clear the polyline if conditions are not met
+        }
+      }
+
+      function clearPolyline() {
+        console.log("Clearing polyline");
+        directionsRenderer.setDirections({ routes: [] }); // Explicitly clear routes
+      }
+
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initMap`;
+      script.async = true;
+      document.head.appendChild(script);
+    </script>
+  </body>
+</html>
