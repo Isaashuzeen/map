@@ -118,6 +118,11 @@
             };
             console.log("Report ID:", reportSnapshot.docs[0].id);
             console.log("Report Location:", reportLocation);
+
+            // Center the map on the report's location and set the zoom level
+            map.setCenter(reportLocation);
+            map.setZoom(18); // Adjust the zoom level as needed
+
             updateMarkers();
 
             // Check dispatch collection for the latest "ongoing" status for this report
