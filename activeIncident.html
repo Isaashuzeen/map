@@ -3,6 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+      integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxve5UMg5GT6L4JJg=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
     <title>Map Display</title>
     <style>
       html,
@@ -11,15 +19,30 @@
         margin: 0;
         padding: 0;
       }
-
       #map {
         height: 100%;
         width: 100%;
+      }
+      .refresh-button {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgb(255, 118, 118);
+        border: none;
+        cursor: pointer;
+        padding: 10px;
+        border-radius: 50%;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        color: white;
       }
     </style>
   </head>
   <body>
     <div id="map"></div>
+
+    <button class="refresh-button" onclick="refreshMap()" title="Reload Map">
+      <i class="fas fa-sync-alt"></i>
+    </button>
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -29,6 +52,7 @@
         query,
         where,
         onSnapshot,
+        getDocs,
       } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
       const firebaseConfig = {
@@ -76,46 +100,48 @@
           suppressMarkers: true,
         });
 
-        // Add real-time listeners for flagged user and report locations
         setupRealTimeListeners();
       };
 
       async function setupRealTimeListeners() {
-        const dispatchQuery = query(collection(db, "dispatch"));
+        const reportQuery = query(
+          collection(db, "reports"),
+          where("flag", "==", true)
+        );
 
-        onSnapshot(dispatchQuery, (snapshot) => {
-          if (!snapshot.empty) {
-            const dispatchData = snapshot.docs[0].data();
-            activeTeamId = dispatchData.team;
-            dispatchStatus = dispatchData.status;
+        onSnapshot(reportQuery, async (reportSnapshot) => {
+          if (!reportSnapshot.empty) {
+            const reportDoc = reportSnapshot.docs[0].data();
+            reportLocation = {
+              lat: reportDoc.location.lat,
+              lng: reportDoc.location.lng,
+            };
+            console.log("Report ID:", reportSnapshot.docs[0].id);
+            console.log("Report Location:", reportLocation);
+            updateMarkers();
 
-            console.log("Dispatch status changed:", dispatchStatus);
-
-            const reportQuery = query(
-              collection(db, "reports"),
-              where("flag", "==", true)
+            // Check dispatch collection for the latest "ongoing" status for this report
+            const dispatchQuery = query(
+              collection(db, "dispatch"),
+              where("incident", "==", reportSnapshot.docs[0].id),
+              where("status", "==", "ongoing")
             );
 
-            onSnapshot(reportQuery, (reportSnapshot) => {
-              if (!reportSnapshot.empty) {
-                const reportDoc = reportSnapshot.docs[0].data();
-                reportLocation = {
-                  lat: reportDoc.location.lat,
-                  lng: reportDoc.location.lng,
-                };
-              } else {
-                reportLocation = null;
-              }
-              updateMarkers();
-              drawPolylineIfReady();
-            });
+            const dispatchSnapshot = await getDocs(dispatchQuery);
 
-            if (dispatchStatus === "ongoing" && activeTeamId) {
+            if (!dispatchSnapshot.empty) {
+              const latestDispatch = dispatchSnapshot.docs[0].data();
+              activeTeamId = latestDispatch.team;
+              dispatchStatus = latestDispatch.status;
+              console.log("Latest Dispatch ID:", dispatchSnapshot.docs[0].id);
+              console.log("Dispatch Status:", dispatchStatus);
+              console.log("Active Team ID:", activeTeamId);
+
+              // Fetch user with role "Driver" in the active team
               const userQuery = query(
                 collection(db, "users"),
-                where("flag", "==", true),
-                where("role", "==", "SDiZU41f2Ct6JwKVsRJN"),
-                where("team", "==", activeTeamId)
+                where("team", "==", activeTeamId),
+                where("role", "==", "SDiZU41f2Ct6JwKVsRJN") // Role ID for "Driver"
               );
 
               onSnapshot(userQuery, (userSnapshot) => {
@@ -125,6 +151,12 @@
                     lat: userDoc.location.lat,
                     lng: userDoc.location.lng,
                   };
+                  console.log("Driver Assigned:");
+                  console.log(
+                    "Driver Name:",
+                    userDoc.first_name + " " + userDoc.last_name
+                  );
+                  console.log("Driver Location:", userLocation);
                 } else {
                   userLocation = null;
                 }
@@ -132,10 +164,15 @@
                 drawPolylineIfReady();
               });
             } else {
+              // If no ongoing dispatch, show only report location
               userLocation = null;
               updateMarkers();
-              clearPolyline(); // Force clear polyline if conditions are not met
+              clearPolyline();
             }
+          } else {
+            reportLocation = null;
+            updateMarkers();
+            clearPolyline();
           }
         });
       }
@@ -172,7 +209,7 @@
           reportLocation
         ) {
           console.log("Drawing polyline...");
-          clearPolyline(); // Clear any existing polyline before drawing
+          clearPolyline();
 
           const request = {
             origin: userLocation,
@@ -188,14 +225,18 @@
             }
           });
         } else {
-          clearPolyline(); // Clear the polyline if conditions are not met
+          clearPolyline();
         }
       }
 
       function clearPolyline() {
         console.log("Clearing polyline");
-        directionsRenderer.setDirections({ routes: [] }); // Explicitly clear routes
+        directionsRenderer.setDirections({ routes: [] });
       }
+
+      window.refreshMap = function () {
+        location.reload(); // Reloads the page
+      };
 
       const script = document.createElement("script");
       script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initMap`;
