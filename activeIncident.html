@@ -10,7 +10,6 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
-
     <title>Map Display</title>
     <style>
       html,
@@ -79,6 +78,11 @@
       let reportLocation = null;
       let dispatchStatus = null;
       let activeTeamId = null;
+      let reportTitle = "Incident"; // Placeholder for incident title
+      let teamName = "Team"; // Placeholder for team name
+
+      let reportInfoWindow;
+      let userInfoWindow;
 
       window.initMap = function () {
         map = new google.maps.Map(document.getElementById("map"), {
@@ -92,13 +96,16 @@
         directionsService = new google.maps.DirectionsService();
         directionsRenderer = new google.maps.DirectionsRenderer({
           polylineOptions: {
-            strokeColor: "#0000FF",
+            strokeColor: "#FF0000",
             strokeOpacity: 1.0,
             strokeWeight: 5,
           },
           map: map,
           suppressMarkers: true,
         });
+
+        reportInfoWindow = new google.maps.InfoWindow();
+        userInfoWindow = new google.maps.InfoWindow();
 
         setupRealTimeListeners();
       };
@@ -112,20 +119,17 @@
         onSnapshot(reportQuery, async (reportSnapshot) => {
           if (!reportSnapshot.empty) {
             const reportDoc = reportSnapshot.docs[0].data();
+            reportTitle = reportDoc.title || "Incident"; // Replace with actual field for title
             reportLocation = {
               lat: reportDoc.location.lat,
               lng: reportDoc.location.lng,
             };
-            console.log("Report ID:", reportSnapshot.docs[0].id);
-            console.log("Report Location:", reportLocation);
 
-            // Center the map on the report's location and set the zoom level
             map.setCenter(reportLocation);
-            map.setZoom(18); // Adjust the zoom level as needed
+            map.setZoom(18);
 
             updateMarkers();
 
-            // Check dispatch collection for the latest "ongoing" status for this report
             const dispatchQuery = query(
               collection(db, "dispatch"),
               where("incident", "==", reportSnapshot.docs[0].id),
@@ -138,15 +142,12 @@
               const latestDispatch = dispatchSnapshot.docs[0].data();
               activeTeamId = latestDispatch.team;
               dispatchStatus = latestDispatch.status;
-              console.log("Latest Dispatch ID:", dispatchSnapshot.docs[0].id);
-              console.log("Dispatch Status:", dispatchStatus);
-              console.log("Active Team ID:", activeTeamId);
+              teamName = `Team ${activeTeamId}`; // Replace with actual field for team name
 
-              // Fetch user with role "Driver" in the active team
               const userQuery = query(
                 collection(db, "users"),
                 where("team", "==", activeTeamId),
-                where("role", "==", "SDiZU41f2Ct6JwKVsRJN") // Role ID for "Driver"
+                where("role", "==", "SDiZU41f2Ct6JwKVsRJN")
               );
 
               onSnapshot(userQuery, (userSnapshot) => {
@@ -156,20 +157,15 @@
                     lat: userDoc.location.lat,
                     lng: userDoc.location.lng,
                   };
-                  console.log("Driver Assigned:");
-                  console.log(
-                    "Driver Name:",
-                    userDoc.first_name + " " + userDoc.last_name
-                  );
-                  console.log("Driver Location:", userLocation);
+                  teamName = `${userDoc.first_name} ${userDoc.last_name}`; // Replace with user name
+
+                  updateMarkers();
+                  drawPolylineIfReady();
                 } else {
                   userLocation = null;
                 }
-                updateMarkers();
-                drawPolylineIfReady();
               });
             } else {
-              // If no ongoing dispatch, show only report location
               userLocation = null;
               updateMarkers();
               clearPolyline();
@@ -190,6 +186,13 @@
             map: map,
             icon: "rescue.png",
           });
+          userInfoWindow.setContent(
+            `<span style="font-weight: 600;">Driver:</span> ${teamName}`
+          );
+
+          userMarker.addListener("click", () => {
+            userInfoWindow.open(map, userMarker);
+          });
         } else if (userMarker) {
           userMarker.setMap(null);
         }
@@ -200,6 +203,12 @@
             position: reportLocation,
             map: map,
             icon: "alarm.png",
+          });
+          reportInfoWindow.setContent(
+            `<span style="font-weight: 600;">Incident:</span> ${reportTitle}`
+          );
+          reportMarker.addListener("click", () => {
+            reportInfoWindow.open(map, reportMarker);
           });
         } else if (reportMarker) {
           reportMarker.setMap(null);
@@ -213,7 +222,6 @@
           userLocation &&
           reportLocation
         ) {
-          console.log("Drawing polyline...");
           clearPolyline();
 
           const request = {
@@ -235,12 +243,11 @@
       }
 
       function clearPolyline() {
-        console.log("Clearing polyline");
         directionsRenderer.setDirections({ routes: [] });
       }
 
       window.refreshMap = function () {
-        location.reload(); // Reloads the page
+        location.reload();
       };
 
       const script = document.createElement("script");
